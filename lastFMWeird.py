@@ -44,7 +44,8 @@ class ListenerCache:
 			self.con.commit()
 			return int(count)
 		
-lc = ListenerCache(key="9d388089456b20ea34b1f87e09017e9d", secret="8671d6c7022130f6919ecb3622504219")
+(api_key, secret) = [x.strip() for x in file("secrets").readlines()]
+lc = ListenerCache(key=api_key, secret=secret)
 tracks = lc.recent_tracks(argv[1])
 
 logValues = {}
