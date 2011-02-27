@@ -3,10 +3,10 @@ import math
 import sqlite3
 from pickle import dump, load
 from pyx import *
-from sys import argv
+from sys import argv, exit
 from stats import *
 
-assert len(argv) == 2
+assert len(argv) == 2, "Specify a username to check"
 
 class ListenerCache:
 	def __init__(self, key=None, secret=None):
@@ -43,8 +43,12 @@ class ListenerCache:
 			self.cur.execute("insert into tracks values(?, ?, ?)", (artist, title, count))
 			self.con.commit()
 			return int(count)
-		
-(api_key, secret) = [x.strip() for x in file("secrets").readlines()]
+	
+try:
+	(api_key, secret) = [x.strip() for x in file("secrets").readlines()]
+except IOError:
+	print "Make a file called 'secrets' with two lines: your Last.fm api key and secret"
+	exit(-1)
 lc = ListenerCache(key=api_key, secret=secret)
 tracks = lc.recent_tracks(argv[1])
 
