@@ -67,13 +67,15 @@ for k in range(max(logValues.keys())):
 	if k not in logValues:
 		logValues[k] = 0
 
-binsize = max(rawValues)/20.0
-binned = dict([(x,0) for x in range(20)])
+bincount = 20
+
+binsize = max(rawValues)/(bincount*1.0)
+binned = dict([(x,0) for x in range(bincount)])
 
 print "bin size", binsize
 
 for v in rawValues:
-	binned[min(int(v/binsize),19)] +=1
+	binned[min(int(v/binsize),bincount-1)] +=1
 
 ms = meanstdv(rawLogValues)
 towrite = "median: %.2f mean: %.2f std dev: %.2f"%(median(rawLogValues),ms[0],ms[1])
