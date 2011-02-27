@@ -4,6 +4,7 @@ import sqlite3
 from pickle import dump, load
 from pyx import *
 from sys import argv
+from stats import *
 
 assert len(argv) == 2
 
@@ -47,12 +48,14 @@ lc = ListenerCache(key="9d388089456b20ea34b1f87e09017e9d", secret="8671d6c702213
 tracks = lc.recent_tracks(argv[1])
 
 logValues = {}
+rawLogValues = []
 rawValues = []
 
 for t in tracks:
 	rawValue = lc.listener_count(t.track) 
 	rawValues.append(rawValue)
 	logValue = math.log(rawValue,2)
+	rawLogValues.append(logValue)
 	logValue = int(logValue)
 	if logValue not in logValues:
 		logValues[logValue] = 1
@@ -66,14 +69,21 @@ for k in range(max(logValues.keys())):
 binsize = max(rawValues)/20.0
 binned = dict([(x,0) for x in range(20)])
 
-print binsize
-print sorted(rawValues)
+print "bin size", binsize
 
 for v in rawValues:
 	binned[min(int(v/binsize),19)] +=1
 
-g = graph.graphxy(width=8, x=graph.axis.bar())
+ms = meanstdv(rawLogValues)
+towrite = "median: %.2f mean: %.2f std dev: %.2f"%(median(rawLogValues),ms[0],ms[1])
+
+text.set(mode=r"latex")
+
+g = graph.graphxy(width=16, x=graph.axis.bar())
 g.plot(graph.data.points(logValues.items(), xname=1, y=2), [graph.style.bar()])
+g.finish()
+pos = g.vpos(0.02,0.92) # numbers plucked out the air after experimenting
+g.text(pos[0], pos[1], towrite)
 g.writeEPSfile("log")
 
 g = graph.graphxy(width=8, x=graph.axis.bar())
