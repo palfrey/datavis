@@ -84,8 +84,8 @@ g.plot(graph.data.points(logValues.items(), xname=1, y=2), [graph.style.bar()])
 g.finish()
 pos = g.vpos(0.02,0.92) # numbers plucked out the air after experimenting
 g.text(pos[0], pos[1], towrite)
-g.writeEPSfile("log")
+g.pipeGS(filename="log-%s.png"%argv[1], device="png16m")
 
-g = graph.graphxy(width=8, x=graph.axis.bar())
+g = graph.graphxy(width=16, x=graph.axis.bar())
 g.plot(graph.data.points(binned.items(), xname=1, y=2), [graph.style.bar()])
-g.writeEPSfile("binned")
+g.pipeGS(filename="binned-%s.png"%argv[1], device="png16m")
