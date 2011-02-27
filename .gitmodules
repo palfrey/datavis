@@ -1,0 +1,3 @@
+[submodule "pylast"]
+	path = pylast
+	url = git://github.com/mopidy/pylast-deb.git
