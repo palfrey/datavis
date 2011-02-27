@@ -1,25 +1,30 @@
 import sqlite3
 from re import compile
-from os.path import expanduser, join
+from os.path import expanduser, join, exists
 import shutil, tempfile
 from urllib import unquote
 import codecs
 from sys import argv
 from os import system
+from optparse import OptionParser
 
-assert len(argv)==2
+parser = OptionParser()
+parser.add_option("-o","--outfile", dest="outfile", default="out.ps")
+parser.add_option("-p","--path", dest="path", default=expanduser("~/.config/chromium/Default/History"),help="Path to Chrom(e|ium) history file")
+opts, args = parser.parse_args()
+
+if not exists(opts.path):
+	parser.error("History path '%s' doesn't exist!"%opts.path)
 
 enw = compile("http://en.wikipedia.org/wiki/([^#]+)")
 
-path = expanduser("~/.config/chromium/Default/History")
-
 try:
-	conn = sqlite3.connect(path, timeout=1)
+	conn = sqlite3.connect(opts.path, timeout=1)
 	conn.execute("select top(1) from visits")
 except sqlite3.OperationalError, e:
 	if str(e).find("database is locked")!=-1:
 		newpath = join(tempfile.gettempdir(), "History")
-		shutil.copyfile(path, newpath)
+		shutil.copyfile(opts.path, newpath)
 		conn = sqlite3.connect(newpath)
 c = conn.cursor()
 
@@ -56,4 +61,4 @@ for begin in sorted(links):
 		print >>out, "\"%s\" -> \"%s\";"%(begin, end)
 
 print >>out, "}"
-system("twopi %s -Tps -o %s"%(dotfile,argv[1]))
+system("twopi %s -Tps -o %s"%(dotfile,opts.outfile))
