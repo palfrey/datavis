@@ -1,9 +1,13 @@
-from pylast import *
+from sys import argv, exit
+try:
+	from pylast import *
+except ImportError:
+	print "Run 'git submodule update --init' to setup the submodule before running %s"%argv[0]
+	exit(-1)
 import math
 import sqlite3
 from pickle import dump, load
 from pyx import *
-from sys import argv, exit
 from stats import *
 
 assert len(argv) == 2, "Specify a username to check"
