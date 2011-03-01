@@ -51,7 +51,7 @@ class ListenerCache:
 try:
 	(api_key, secret) = [x.strip() for x in file("secrets").readlines()]
 except IOError:
-	print "Make a file called 'secrets' with two lines: your Last.fm api key and secret"
+	print "Make a file called 'secrets' with two lines: your Last.fm api key and secret (see http://www.last.fm/api/account)"
 	exit(-1)
 lc = ListenerCache(key=api_key, secret=secret)
 tracks = lc.recent_tracks(argv[1])
