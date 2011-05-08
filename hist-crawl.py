@@ -67,12 +67,34 @@ dump(links, open("results.pickle","wb"))
 dotfile = join(tempfile.gettempdir(), "history-dot")
 out = codecs.open(dotfile, "wb", "utf-8")
 
-print >>out, "digraph wikipedia {"
-print >>out, "graph [overlap=\"false\", sep=\"+8,8\"];"
+print >>out, "digraph sites {"
+print >>out, "\tgraph [overlap=\"false\", sep=\"+2,2\"];"
+
+prefixes = {}
 
 for begin in sorted(links):
 	for end in sorted(links[begin]):
-		print >>out, "\"%s\" -> \"%s\";"%(begin, end)
+		prefix = ""
+		while len(begin) > len(prefix) and len(end) > len(prefix) and begin[len(prefix)] == end[len(prefix)]:
+			prefix += begin[len(prefix)]
+		while prefix.find("/")!=-1 and prefix[-1] != "/":
+			prefix = prefix[:-1]
+		if prefix!="" and prefix[-1] == "/":
+			if prefix not in prefixes:
+				prefixes[prefix] = []
+			prefixes[prefix].append((begin[len(prefix):],end[len(prefix):]))
+		else:
+			print >>out, "\t\"%s\" -> \"%s\";"%(begin, end)
+
+for p in prefixes:
+	print >>out, "\tsubgraph cluster_%s {"%(p.replace(".", "_").replace("/","_"))
+	print >>out, "\t\tlabel=\"%s\";"%p
+	for begin, end in prefixes[p]:
+		print >>out, "\t\t\"%s\" -> \"%s\";"%(begin, end)
+	print >>out, "\t}"
 
 print >>out, "}"
-system("twopi %s -Tps -o %s"%(dotfile,opts.outfile))
+out.close()
+cmd = "fdp %s -Tps -o %s"%(dotfile,opts.outfile)
+print cmd
+system(cmd)
