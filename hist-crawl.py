@@ -7,10 +7,12 @@ import codecs
 from sys import argv
 from os import system
 from optparse import OptionParser
+from pickle import load, dump
 
 parser = OptionParser()
 parser.add_option("-o","--outfile", dest="outfile", default="out.ps")
 parser.add_option("-p","--path", dest="path", default=expanduser("~/.config/chromium/Default/History"),help="Path to Chrom(e|ium) history file")
+parser.add_option("-s","--pickle", dest="stored", action="append", default=[], help="Add other pickled links files")
 opts, args = parser.parse_args()
 
 if not exists(opts.path):
@@ -29,6 +31,13 @@ except sqlite3.OperationalError, e:
 c = conn.cursor()
 
 links = {}
+
+for f in opts.stored:
+	extra = load(open(f))
+	for begin in extra:
+		if begin not in links:
+			links[begin] = set()
+		links[begin].update(extra[begin])
 
 c.execute("select urls1.id,urls1.url, visits1.visit_time, urls2.url from visits as visits1,urls as urls1,urls as urls2,visits as visits2 where visits1.url = urls1.id and visits1.from_visit != 0 and visits1.from_visit = visits2.id and visits2.url = urls2.id")
 
@@ -50,6 +59,7 @@ for row in c:
 			links[begin] = set()
 		links[begin].add(end)
 
+dump(links, open("results.pickle","wb"))
 dotfile = join(tempfile.gettempdir(), "history-dot")
 out = codecs.open(dotfile, "wb", "utf-8")
 
