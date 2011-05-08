@@ -18,7 +18,10 @@ opts, args = parser.parse_args()
 if not exists(opts.path):
 	parser.error("History path '%s' doesn't exist!"%opts.path)
 
-enw = compile("http://en.wikipedia.org/wiki/([^#]+)")
+host = compile("http://(en.wikipedia.org)/wiki/([^#]+)")
+#enw = compile("http://tvtropes.org/pmwiki/pmwiki.php/Main/(.+)")
+#host = compile("http://([^\/]+)/([^\?]+)")
+#host = compile("http://((?:tvtropes.org)|(?:en.wikipedia.org))/([^\?]+)")
 
 try:
 	conn = sqlite3.connect(opts.path, timeout=1)
@@ -47,12 +50,13 @@ def cleanup(name):
 for row in c:
 	(id, url, time, ref) = row
 
-	end = enw.search(url)
-	begin = enw.search(ref)
+	end = host.search(url)
+	begin = host.search(ref)
 
-	if begin and end:
-		begin = cleanup(begin.groups()[0])
-		end = cleanup(end.groups()[0])
+	if begin and end and begin.groups()[0] == end.groups()[0]:
+		begin = cleanup("/".join(begin.groups()))
+		end = cleanup("/".join(end.groups()))
+		print begin, end
 		if begin == end:
 			continue
 		if begin not in links:
