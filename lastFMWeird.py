@@ -1,9 +1,13 @@
-from pylast import *
+from sys import argv, exit
+try:
+	from pylast import *
+except ImportError:
+	print "Run 'git submodule update --init' to setup the submodule before running %s"%argv[0]
+	exit(-1)
 import math
 import sqlite3
 from pickle import dump, load
 from pyx import *
-from sys import argv, exit
 from stats import *
 
 assert len(argv) == 2, "Specify a username to check"
@@ -47,7 +51,7 @@ class ListenerCache:
 try:
 	(api_key, secret) = [x.strip() for x in file("secrets").readlines()]
 except IOError:
-	print "Make a file called 'secrets' with two lines: your Last.fm api key and secret"
+	print "Make a file called 'secrets' with two lines: your Last.fm api key and secret (see http://www.last.fm/api/account)"
 	exit(-1)
 lc = ListenerCache(key=api_key, secret=secret)
 tracks = lc.recent_tracks(argv[1])
