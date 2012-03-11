@@ -23,16 +23,6 @@ host = compile("http://(en.wikipedia.org)/wiki/([^#]+)")
 #host = compile("http://([^\/]+)/([^\?]+)")
 #host = compile("http://((?:tvtropes.org)|(?:en.wikipedia.org))/([^\?]+)")
 
-try:
-	conn = sqlite3.connect(opts.path, timeout=1)
-	conn.execute("select top(1) from visits")
-except sqlite3.OperationalError, e:
-	if str(e).find("database is locked")!=-1:
-		newpath = join(tempfile.gettempdir(), "History")
-		shutil.copyfile(opts.path, newpath)
-		conn = sqlite3.connect(newpath)
-c = conn.cursor()
-
 links = {}
 
 for f in opts.stored:
@@ -42,13 +32,36 @@ for f in opts.stored:
 			links[begin] = set()
 		links[begin].update(extra[begin])
 
-c.execute("select urls1.id,urls1.url, visits1.visit_time, urls2.url from visits as visits1,urls as urls1,urls as urls2,visits as visits2 where visits1.url = urls1.id and visits1.from_visit != 0 and visits1.from_visit = visits2.id and visits2.url = urls2.id")
+def chrome(path):
+	try:
+		conn = sqlite3.connect(path, timeout=1)
+		conn.execute("select top(1) from visits")
+	except sqlite3.OperationalError, e:
+		if str(e).find("database is locked")!=-1:
+			newpath = join(tempfile.gettempdir(), "History")
+			shutil.copyfile(path, newpath)
+			conn = sqlite3.connect(newpath)
+
+	c = conn.cursor()
+
+	c.execute("select urls1.url,urls2.url from visits as visits1,urls as urls1,urls as urls2,visits as visits2 where visits1.url = urls1.id and visits1.from_visit != 0 and visits1.from_visit = visits2.id and visits2.url = urls2.id")
+
+	return c
+
+def firefox(path):
+	conn = sqlite3.connect(path, timeout=1)
+	c = conn.cursor()
+	c.execute("select place1.url, place2.url from moz_historyvisits as visits1, moz_places as place1, moz_places as place2, moz_historyvisits as visits2 where visits1.place_id = place1.id and visits1.from_visit!=0 and visits1.from_visit = visits2.id and visits2.place_id = place2.id")
+			
+	return c
 
 def cleanup(name):
 	return unquote(name.replace("_", " "))
 
-for row in c:
-	(id, url, time, ref) = row
+#generate = firefox(opts.path)
+generate = chrome(opts.path)
+
+for (url, ref) in generate:
 
 	end = host.search(url)
 	begin = host.search(ref)
