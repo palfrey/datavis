@@ -18,7 +18,7 @@ opts, args = parser.parse_args()
 if not exists(opts.path):
 	parser.error("History path '%s' doesn't exist!"%opts.path)
 
-host = compile("http://(en.wikipedia.org)/wiki/([^#]+)")
+host = compile("http://(en.wikipedia.org)/wiki/([^#&]+)")
 #enw = compile("http://tvtropes.org/pmwiki/pmwiki.php/Main/(.+)")
 #host = compile("http://([^\/]+)/([^\?]+)")
 #host = compile("http://((?:tvtropes.org)|(?:en.wikipedia.org))/([^\?]+)")
