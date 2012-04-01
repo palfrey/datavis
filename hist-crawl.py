@@ -130,6 +130,3 @@ for p in prefixes:
 
 print >>out, "}"
 out.close()
-cmd = "fdp %s -Tps -o %s"%(dotfile,opts.outfile)
-print cmd
-system(cmd)
