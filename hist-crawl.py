@@ -4,10 +4,8 @@ from os.path import expanduser, join, exists, dirname
 import shutil, tempfile
 from urllib import unquote
 import codecs
-from sys import argv
-from os import system
+from os import system, mkdir
 from optparse import OptionParser
-from pickle import load, dump
 from ConfigParser import SafeConfigParser
 
 paths = []
@@ -29,6 +27,8 @@ def chrome(option, opt, value, parser):
 			newpath = join(tempfile.gettempdir(), "History")
 			shutil.copyfile(path, newpath)
 			conn = sqlite3.connect(newpath)
+		else:
+			raise
 
 	c = conn.cursor()
 
@@ -55,28 +55,25 @@ def firefox(option, opt, value, parser):
 	paths.append(c)
 
 parser = OptionParser()
-parser.add_option("-o","--outfile", dest="outfile", default="out.ps")
-parser.add_option("-c","--chrome", action="callback", callback=chrome, help="Path to Chrom(e|ium) history file", nargs=1, type="string")
-parser.add_option("-f","--firefox", action="callback", callback=firefox, help="Path to Firefox/Iceweasel history file", nargs=1, type="string")
-parser.add_option("-s","--pickle", dest="stored", action="append", default=[], help="Add other pickled links files")
+parser.add_option("-o","--outdir", dest="outdir", default="out")
+parser.add_option("-c","--chrome", action="callback", callback=chrome, help="Path to Chrom(e|ium) history file, or '-' for the default path", nargs=1, type="string")
+parser.add_option("-f","--firefox", action="callback", callback=firefox, help="Path to Firefox/Iceweasel history file, or '-' for the default path", nargs=1, type="string")
 opts, args = parser.parse_args()
 
 if len(paths) ==0 :
 	parser.error("Didn't specify any history paths")
 
-host = compile("http://(en.wikipedia.org)/wiki/([^#&]+)")
-#enw = compile("http://tvtropes.org/pmwiki/pmwiki.php/Main/(.+)")
+#host = compile("http://(.+)")
+host = compile("http://en.wikipedia.org/wiki/([^#&]+)")
+#host = compile("http://tvtropes.org/pmwiki/pmwiki.php/Main/([^&?]+)")
 #host = compile("http://([^\/]+)/([^\?]+)")
 #host = compile("http://((?:tvtropes.org)|(?:en.wikipedia.org))/([^\?]+)")
 
 links = {}
+ends = {}
 
-for f in opts.stored:
-	extra = load(open(f))
-	for begin in extra:
-		if begin not in links:
-			links[begin] = set()
-		links[begin].update(extra[begin])
+if not exists(opts.outdir):
+	mkdir(opts.outdir)
 
 def cleanup(name):
 	return unquote(name.replace("_", " "))
@@ -86,47 +83,66 @@ for generate in paths:
 		end = host.search(url)
 		begin = host.search(ref)
 
-		if begin and end and begin.groups()[0] == end.groups()[0]:
+		if begin and end:
 			begin = cleanup("/".join(begin.groups()))
 			end = cleanup("/".join(end.groups()))
-			print begin, end
 			if begin == end:
 				continue
 			if begin not in links:
 				links[begin] = set()
 			links[begin].add(end)
+			if end not in ends:
+				ends[end] = set()
+			ends[end].add(begin)
 
-dump(links, open("results.pickle","wb"))
-
-#dotfile = join(tempfile.gettempdir(), "history-dot")
-dotfile = "history.dot"
-out = codecs.open(dotfile, "wb", "utf-8")
-
-print >>out, "digraph sites {"
-print >>out, "\tgraph [overlap=\"false\", sep=\"+2,2\"];"
-
-prefixes = {}
-
-for begin in sorted(links):
-	for end in sorted(links[begin]):
-		prefix = ""
-		while len(begin) > len(prefix) and len(end) > len(prefix) and begin[len(prefix)] == end[len(prefix)]:
-			prefix += begin[len(prefix)]
-		while prefix.find("/")!=-1 and prefix[-1] != "/":
-			prefix = prefix[:-1]
-		if prefix!="" and prefix[-1] == "/":
-			if prefix not in prefixes:
-				prefixes[prefix] = []
-			prefixes[prefix].append((begin[len(prefix):],end[len(prefix):]))
+def genTree(r, conn, fwd, prev = None):
+	if prev == None:
+		prev = [r]
+	if r not in conn:
+		return []
+	items = []
+	for l in conn[r]:
+		if fwd:
+			items.append((r,l))
 		else:
-			print >>out, "\t\"%s\" -> \"%s\";"%(begin, end)
+			items.append((l,r))
+		if l not in prev:
+			items.extend(genTree(l, conn, fwd, prev + [l]))
+	return items
 
-for p in prefixes:
-	print >>out, "\tsubgraph cluster_%s {"%(p.replace(".", "_").replace("/","_").replace(":", "_").replace(" ", "_"))
-	print >>out, "\t\tlabel=\"%s\";"%p
-	for begin, end in prefixes[p]:
-		print >>out, "\t\t\"%s\" -> \"%s\";"%(begin, end)
-	print >>out, "\t}"
+def removePairs(conn, pairs, fwd):
+	for p in pairs:
+		if fwd:
+			(a,b) = p
+		else:
+			(b,a) = p
+		conn[a].discard(b)
+		if len(conn[a]) == 0:
+			del conn[a]
 
-print >>out, "}"
-out.close()
+safeLink = compile("[^a-zA-Z0-9_]")
+
+while len(links) > 0:
+	start = links.keys()[0]
+
+	startf = safeLink.sub("_", start).encode("utf-8")[:100]
+	dotfile = join(opts.outdir, "%s.dot"%startf)
+	psfile = join(opts.outdir, "%s.ps"%startf)
+	pairs = set(genTree(start, links, True) + genTree(start, ends, False))
+	if not exists(psfile) and len(pairs) > 1:
+		out = codecs.open(dotfile, "wb", "utf-8")
+		print >>out, "digraph links {"
+		print >>out, "\tgraph [overlap=\"false\", sep=\"+2,2\"];"
+
+		for (a, b) in pairs:
+			print >>out, "\t\"%s\" -> \"%s\";" % (
+				a.replace("\"", "\\\""), b.replace("\"", "\\\"")
+			)
+		print >>out, "}"
+		out.close()
+		cmd = "dot \"%s\" -Tps -o \"%s\""%(dotfile, psfile)
+		print cmd
+		ret = system(cmd)
+		assert ret == 0, ret
+	removePairs(links, pairs, True)
+	removePairs(ends, pairs, False)
