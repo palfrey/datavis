@@ -7,6 +7,7 @@ import codecs
 from os import system, mkdir
 from optparse import OptionParser
 from ConfigParser import SafeConfigParser
+from types import DictType
 
 paths = []
 
@@ -63,11 +64,13 @@ opts, args = parser.parse_args()
 if len(paths) ==0 :
 	parser.error("Didn't specify any history paths")
 
-#host = compile("http://(.+)")
-host = compile("http://en.wikipedia.org/wiki/([^#&]+)")
-#host = compile("http://tvtropes.org/pmwiki/pmwiki.php/Main/([^&?]+)")
-#host = compile("http://([^\/]+)/([^\?]+)")
-#host = compile("http://((?:tvtropes.org)|(?:en.wikipedia.org))/([^\?]+)")
+host = compile("http://(.+)")
+
+niceLabels = {
+		compile("google.(?:(?:co.uk)|(?:com))/search\?.*?q=([^&]+)"): "Google search: '%s'",
+		compile("google.(?:(?:co.uk)|(?:com))/url\?"): "Google link from search...",
+		compile("local.google.(?:(?:co.uk)|(?:com))/maps\?.*?q=([^&]+)"): "Google maps search for '%s'",
+		}
 
 links = {}
 ends = {}
@@ -75,8 +78,13 @@ ends = {}
 if not exists(opts.outdir):
 	mkdir(opts.outdir)
 
+def simplify(l):
+	if l[-1] == "/":
+		l = l[:-1]
+	return l
+
 def cleanup(name):
-	return unquote(name.replace("_", " "))
+	return simplify(unquote(name.replace("_", " ")))
 
 for generate in paths:
 	for (url, ref) in generate:
@@ -95,11 +103,11 @@ for generate in paths:
 				ends[end] = set()
 			ends[end].add(begin)
 
-def genTree(r, conn, fwd, prev = None):
+def genTree(r, conn, rconn, fwd, prev = None):
 	if prev == None:
 		prev = [r]
 	if r not in conn:
-		return []
+		return ([], prev)
 	items = []
 	for l in conn[r]:
 		if fwd:
@@ -107,8 +115,11 @@ def genTree(r, conn, fwd, prev = None):
 		else:
 			items.append((l,r))
 		if l not in prev:
-			items.extend(genTree(l, conn, fwd, prev + [l]))
-	return items
+			(newitems, prev) = genTree(l, conn, rconn, fwd, prev + [l])
+			items.extend(newitems)
+			(newitems, prev) = genTree(l, rconn, conn, not fwd, prev + [l])
+			items.extend(newitems)
+	return (items, prev + list(conn[r]))
 
 def removePairs(conn, pairs, fwd):
 	for p in pairs:
@@ -128,21 +139,111 @@ while len(links) > 0:
 	startf = safeLink.sub("_", start).encode("utf-8")[:100]
 	dotfile = join(opts.outdir, "%s.dot"%startf)
 	psfile = join(opts.outdir, "%s.ps"%startf)
-	pairs = set(genTree(start, links, True) + genTree(start, ends, False))
+	print "start", start
+	pairs = set(genTree(start, links, ends, True)[0] + genTree(start, ends, links, False)[0])
 	if not exists(psfile) and len(pairs) > 1:
+		
+	
+		def comparelinks(one, two):
+			return simplify(one) == simplify(two)
+
+		print "pairs", pairs
+		inset = set([x[0] for x in pairs] + [x[1] for x in pairs])
+		tree = {}
+		for link in inset:
+			if link.find("?")!=-1:
+				(begin, rest) = link.split("?",1)
+				bits = begin.split("/")
+				bits[-1] += "?" + rest
+			else:
+				bits = link.split("/")
+			current = tree
+			for bit in bits[:-1]:
+				if bit not in current:
+					try:
+						current[bit] = {}
+					except:
+						print current, bit
+						raise
+				if type(current[bit])!=DictType:
+					current[bit] = {"":current[bit]}
+				current = current[bit]
+			if current.has_key(bits[-1]):
+				if type(current[bits[-1]]) != DictType:
+					assert comparelinks(link, current[bits[-1]]),(link, current[bits[-1]])
+					current[bits[-1]] = simplify(link)
+				else:
+					assert type(current[bits[-1]]) == DictType, (link, current[bits[-1]])
+					assert not current[bits[-1]].has_key("") or comparelinks(link, current[bits[-1]][""]), (link, current[bits[-1]][""])
+					current[bits[-1]][""] = simplify(link)
+			else:
+				current[bits[-1]] = simplify(link)
+			print "adding", bits, link
+		print "original tree", tree
+
+		def collapsetree(top):
+			for k in top:
+				#print "top",top
+				#print "k", k
+				if type(top[k]) == DictType:
+					if len(top[k]) == 1:
+						sk = top[k].keys()[0]
+						nk = k + "/" + sk
+						print "collapsing", k, sk
+						top[nk] = top[k][sk]
+						del top[k]
+						if type(top[nk]) != DictType:
+							continue
+						k = nk
+					collapsetree(top[k])
+
 		out = codecs.open(dotfile, "wb", "utf-8")
 		print >>out, "digraph links {"
 		print >>out, "\tgraph [overlap=\"false\", sep=\"+2,2\"];"
 
+		collapsetree(tree)
+		print "collapse tree",tree
+
+		def makeLink(link):
+			l = safeLink.sub("_", link)
+			if l[0].isdigit():
+				l = "_" + l
+			return l
+
+		def makeLabel(link, fulllink):
+			for k in niceLabels:
+				m = k.search(fulllink)
+				if m!=None:
+					return (niceLabels[k] % m.groups()).replace("+", " ")
+			return link.replace("\"", "_")[:100]
+
+		def writeTree(top, insert = "\t"):
+			for k in top:
+				if type(top[k]) == DictType:
+					print >> out, insert + "subgraph cluster_%s {"%(makeLink(k))
+					print >> out, insert + "\tlabel=\"%s\";"%makeLabel(k, k)
+					writeTree(top[k], insert + "\t")
+					print >> out, insert + "}"
+				else:
+					print >> out, insert + "%s [label =\"%s\"];"%(makeLink(top[k]), makeLabel(k, top[k]))
+
+		writeTree(tree)
+
+
 		for (a, b) in pairs:
 			print >>out, "\t\"%s\" -> \"%s\";" % (
-				a.replace("\"", "\\\""), b.replace("\"", "\\\"")
+				makeLink(a), makeLink(b)
 			)
 		print >>out, "}"
 		out.close()
-		cmd = "dot \"%s\" -Tps -o \"%s\""%(dotfile, psfile)
-		print cmd
-		ret = system(cmd)
-		assert ret == 0, ret
+		for prog in ("dot", "fdp", "neato"):
+			cmd = prog + " \"%s\" -Tps -o \"%s\""%(dotfile, psfile)
+			print cmd
+			ret = system(cmd)
+			if ret == 0:
+				break
+			print "ret", ret
+		else:
+			raise Exception, "All graphviz commands failed for %s" % dotfile
 	removePairs(links, pairs, True)
 	removePairs(ends, pairs, False)
