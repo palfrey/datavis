@@ -209,7 +209,7 @@ while len(links) > 0:
 
 		def makeLink(link):
 			l = safeLink.sub("_", link)
-			if l[0].isdigit():
+			if l == "" or l[0].isdigit():
 				l = "_" + l
 			return l
 
