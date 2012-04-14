@@ -182,19 +182,22 @@ while len(links) > 0:
 		print "original tree", tree
 
 		def collapsetree(top):
-			for k in top:
-				#print "top",top
-				#print "k", k
+			todo = top.keys()
+			for k in todo:
+				if k not in top: # already processed
+					continue
 				if type(top[k]) == DictType:
-					if len(top[k]) == 1:
+					while len(top[k]) == 1:
 						sk = top[k].keys()[0]
 						nk = k + "/" + sk
-						print "collapsing", k, sk
+						print "collapsing", nk
 						top[nk] = top[k][sk]
 						del top[k]
-						if type(top[nk]) != DictType:
-							continue
+						todo.append(nk)
 						k = nk
+						if type(top[k]) != DictType:
+							break
+				if type(top[k]) == DictType:
 					collapsetree(top[k])
 
 		out = codecs.open(dotfile, "wb", "utf-8")
