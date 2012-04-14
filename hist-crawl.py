@@ -157,6 +157,7 @@ while len(links) > 0:
 				bits[-1] += "?" + rest
 			else:
 				bits = link.split("/")
+			bits = [x for x in bits if x!=""]
 			current = tree
 			for bit in bits[:-1]:
 				if bit not in current:
